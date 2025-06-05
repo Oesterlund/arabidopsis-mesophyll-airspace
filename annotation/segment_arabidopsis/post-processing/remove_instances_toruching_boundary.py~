@@ -1,0 +1,76 @@
+import argparse
+import os
+import nibabel
+import numpy as np
+import napari
+
+def main():
+    description = '''Remove small connected components by expanding all non-small connected into the small connected components
+    '''
+    parser = argparse.ArgumentParser(description)
+    parser.add_argument('inpath', type=str, help='Path to instance segmentation')
+    parser.add_argument('outpath', type=str, help='Path to store post processed instance segmentation')
+    parser.add_argument('small_threshold', type=int, help='Everything less than the threshold is considered small and removed')
+    args = parser.parse_args()
+    
+    outdir = os.path.dirname(args.outpath)
+    if outdir != '':
+        os.makedirs(outdir, exist_ok=True)
+    
+    seg = nibabel.load(args.inpath)
+    affine = seg.affine
+    seg = np.asanyarray(seg.dataobj)
+    n_labels = np.max(seg)
+
+    sizes, bins = np.histogram(seg, bins=range(1,n_labels+1), range=(1, n_labels))
+
+    print(sizes.shape)
+    print(bins.shape)
+
+    small_idx = sizes < args.small_threshold
+    #small = np.zeros_like(seg)
+    for idx in np.nonzero(small_idx)[0]:
+        print(idx)
+        label = idx + 1
+        small = seg == label
+        break
+
+    viewer = napari.view_labels(seg)
+    viewer.add_labels(small)
+    napari.run()
+        
+    return
+
+
+    # # It seems that using distance transform is better than erosion or dilation. Not sure why that is, or if it is
+    # # actually better and not appear so.
+    # # Morphology is much faster, so it would be nice to change.
+    # print('Distance transform start')
+    # dist = ndi.distance_transform_edt(not_boundary)
+    # print('Done')
+    # not_boundary[dist < r] = 0
+    # # print('Erosion start')
+    # # not_boundary = ndi.binary_erosion(not_boundary, ball(r))
+    # # print('Done')
+    # ## Or equivalently
+    # # print('Dilation start')
+    # # not_boundary = ~ndi.binary_dilation(~not_boundary, ball(r)) 
+    # # print('Done')
+    # class_seg = seg == class_id
+    
+    # inner = class_seg * not_boundary
+    # # Remove a 1 pixel boundary to avoid leakage.
+    # inner[0,:,:] = inner[-1,:,:] = 0
+    # inner[:,0,:] = inner[:,-1,:] = 0
+    # inner[:,:,0] = inner[:,:,-1] = 0
+    # print('Segmentation start')
+    # labels = expand_labels(ndi.label(inner)[0], 2*r) * class_seg
+    # print('Done')
+    
+    # mask = nibabel.Nifti1Image(labels, affine)
+    # nibabel.save(mask, args.outpath)
+
+    # return 0
+
+if __name__ == '__main__':
+    main()

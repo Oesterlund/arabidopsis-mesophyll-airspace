@@ -1,0 +1,62 @@
+import argparse
+import os
+import nibabel
+import numpy as np
+import scipy.ndimage as ndi
+
+def main():    
+    parser = argparse.ArgumentParser()
+    #parser.add_argument('imagepath', type=str, help='Path to image')
+    parser.add_argument('boundary_segpath', type=str, help='Path to boundary segmentation')
+    parser.add_argument('semantic_segpath', type=str, help='Path to semantic segmentation')
+    parser.add_argument('outpath', type=str, help='Path to instance segmentation in. '
+                        '(Use .nii.gz extension for compression)')
+    args = parser.parse_args()
+
+    r = 5
+    class_id = 1
+
+    outdir = os.path.dirname(args.outpath)
+    if outdir != '':
+        os.makedirs(outdir, exist_ok=True)
+    
+    seg = nibabel.load(args.semantic_segpath)
+    affine = seg.affine
+    seg = np.asanyarray(seg.dataobj)
+
+    # The boundary is the boundary segmentation + all the other classes dilated by ball with radius r
+    not_boundary = np.asanyarray(nibabel.load(args.boundary_segpath).dataobj) == 0
+    not_boundary[seg != class_id] = 0
+
+    # It seems that using distance transform is better than erosion or dilation. Not sure why that is, or if it is
+    # actually better and not appear so.
+    # Morphology is much faster, so it would be nice to change.
+    print('Distance transform start')
+    dist = ndi.distance_transform_edt(not_boundary)
+    print('Done')
+    not_boundary[dist < r] = 0
+    # print('Erosion start')
+    # not_boundary = ndi.binary_erosion(not_boundary, ball(r))
+    # print('Done')
+    ## Or equivalently
+    # print('Dilation start')
+    # not_boundary = ~ndi.binary_dilation(~not_boundary, ball(r)) 
+    # print('Done')
+    class_seg = seg == class_id
+    
+    inner = class_seg * not_boundary
+    # Remove a 1 pixel boundary to avoid leakage.
+    inner[0,:,:] = inner[-1,:,:] = 0
+    inner[:,0,:] = inner[:,-1,:] = 0
+    inner[:,:,0] = inner[:,:,-1] = 0
+    print('Segmentation start')
+    labels = expand_labels(ndi.label(inner)[0], 2*r) * class_seg
+    print('Done')
+    
+    mask = nibabel.Nifti1Image(labels, affine)
+    nibabel.save(mask, args.outpath)
+
+    return 0
+
+if __name__ == '__main__':
+    main()
