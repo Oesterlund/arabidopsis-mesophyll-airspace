@@ -27,3 +27,6 @@ Thumbs.db
 *.svg
 *.npy
 *.nii.gz
+
+# Ignore folders
+annotation/segment_arabidopsis/models/
