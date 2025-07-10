@@ -13,7 +13,26 @@ import seaborn as sns
 import scienceplots
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from scipy.stats import bootstrap
+from pathlib import Path
 
+#####
+# define paths
+#####
+try:
+    # When running as a .py file
+    script_dir = Path(__file__).resolve().parent
+except NameError:
+    # When running interactively (e.g., in Spyder or Jupyter)
+    script_dir = Path(os.getcwd()).resolve()
+
+main_path = (script_dir / '..' ).resolve()
+savepath = (main_path / 'article_figs' / 'figs' ).resolve()
+
+savepath.mkdir(parents=True, exist_ok=True)
+
+#####
+# Set plotting style
+#####
 plt.style.use(['science', 'nature'])
 
 # Global plot settings
@@ -30,8 +49,6 @@ params = {
 plt.rcParams.update(params)
 
 plt.close('all')
-
-savepath = '/home/isabella/Documents/PLEN/x-ray/article_figs/figs/' 
 
 palette = {"WT": "darkturquoise", "RIC": "indigo", "ROP": "#FF6700"}
 
@@ -79,10 +96,16 @@ def plot_with_mixedmodel_tukey(df, value_col, ylabel, save_name, scaling=1.0):
         subset = df[(df['time'] == time) & (df['side'] == side)].copy()
 
         subset[value_col] *= scaling
-
+        
         sns.stripplot(data=subset, x='genotype', y=value_col,
-                      dodge=True, jitter=0.25, alpha=0.2,
-                      ax=ax, palette=palette)
+              hue='genotype', dodge=False, jitter=0.25, alpha=0.2,
+              ax=ax, palette=palette, legend=False)
+
+        # Get actual xtick positions and labels
+        xticks = ax.get_xticks()
+        xticklabels = [tick.get_text() for tick in ax.get_xticklabels()]
+        tick_lookup = dict(zip(xticklabels, xticks))
+
 
         # mean ± 90% bootstrap confidence interval
         group_stats = []
@@ -102,11 +125,11 @@ def plot_with_mixedmodel_tukey(df, value_col, ylabel, save_name, scaling=1.0):
         group_stats = pd.DataFrame(group_stats)
 
         for j, row in group_stats.iterrows():
-            xpos = subset['genotype'].cat.categories.tolist().index(row['genotype'])
+            x = tick_lookup.get(row['genotype'], j)
             yerr_lower = row['mean'] - row['ci_lower']
             yerr_upper = row['ci_upper'] - row['mean']
-            
-            ax.errorbar(x=xpos, y=row['mean'],
+
+            ax.errorbar(x=x, y=row['mean'],
                         yerr=[[yerr_lower], [yerr_upper]],
                         fmt='o', color=palette[row['genotype']],
                         capsize=5, lw=1.5)
@@ -130,8 +153,8 @@ def plot_with_mixedmodel_tukey(df, value_col, ylabel, save_name, scaling=1.0):
             pval = row['p-adj']
             star = pval_to_star(pval)
 
-            xpos1 = ["WT", "ROP", "RIC"].index(group1)
-            xpos2 = ["WT", "ROP", "RIC"].index(group2)
+            xpos1 = tick_lookup[group1]
+            xpos2 = tick_lookup[group2]
             x_center = (xpos1 + xpos2) / 2
             y = ymax + (idx + 1) * (ymax*0.05)  # vertical spacing
 
@@ -142,6 +165,7 @@ def plot_with_mixedmodel_tukey(df, value_col, ylabel, save_name, scaling=1.0):
         week_number = time.replace('week', 'Week ')  # adds space and capitalizes
         ax.set_title(f"{week_number} {side}")
         ax.set_ylabel(ylabel)
+        ax.set_xlabel("")
 
     plt.tight_layout()
     plt.savefig(os.path.join(savepath, save_name), dpi=300)
@@ -153,8 +177,8 @@ def plot_with_mixedmodel_tukey(df, value_col, ylabel, save_name, scaling=1.0):
 #
 ###############################################################################
 
-df_stomata_density = pd.read_csv('/home/isabella/Documents/PLEN/x-ray/Yang_data/stomata density.csv')
-df_stomata_size = pd.read_csv('/home/isabella/Documents/PLEN/x-ray/Yang_data/stomata size.csv')
+df_stomata_density = pd.read_csv(main_path / 'Yang_data/stomata density.csv')
+df_stomata_size = pd.read_csv(main_path / 'Yang_data/stomata measurements.csv')
 
 df_stomata_density.loc[df_stomata_density['genotype'] == 'Col-0', 'genotype'] = 'WT'
 df_stomata_size.loc[df_stomata_size['genotype'] == 'Col-0', 'genotype'] = 'WT'
@@ -162,7 +186,7 @@ df_stomata_size.loc[df_stomata_size['genotype'] == 'Col-0', 'genotype'] = 'WT'
 # Plot Stomata Size
 plot_with_mixedmodel_tukey(
     df=df_stomata_size,
-    value_col='stomata_size',
+    value_col='area',
     ylabel=r"Stomata size ($\mu m^2$)",
     save_name="stomata_size_stats_tukey.pdf",
     scaling=1.0

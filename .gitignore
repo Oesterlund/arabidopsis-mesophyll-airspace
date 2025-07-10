@@ -30,3 +30,6 @@ Thumbs.db
 
 # Ignore folders
 annotation/segment_arabidopsis/models/
+
+# do not ignore specific files in this directory
+!Yang_data/
